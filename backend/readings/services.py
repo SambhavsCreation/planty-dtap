@@ -1,0 +1,123 @@
+import io
+import json
+import urllib.error
+import urllib.request
+
+from django.conf import settings
+from gtts import gTTS
+
+
+class PlantAnalysisError(Exception):
+    pass
+
+
+def _extract_json_object(raw_content):
+    raw_content = raw_content.strip()
+
+    if raw_content.startswith('{') and raw_content.endswith('}'):
+        return raw_content
+
+    start = raw_content.find('{')
+    end = raw_content.rfind('}')
+    if start == -1 or end == -1 or end <= start:
+        raise PlantAnalysisError('LLM response did not contain a JSON object.')
+
+    return raw_content[start : end + 1]
+
+
+def analyze_reading_with_llm(soil_level, ambient_light_level):
+    if not settings.OPENROUTER_API_KEY:
+        raise PlantAnalysisError('OPENROUTER_KEY is not configured.')
+
+    prompt = f"""
+You are evaluating the health of a single house plant.
+
+Input reading:
+- soilLevel: {soil_level}
+- ambientLightLevel: {ambient_light_level}
+
+Decide the plant condition using exactly one of these labels:
+- good
+- neutral
+- bad
+
+Then write exactly 5 different short first-person sentences from the plant's perspective.
+Examples of tone:
+- good: "I feel great today."
+- neutral: "I could use a bit more light."
+- bad: "Help me, I'm drying out."
+
+Return only valid JSON in this exact shape:
+{{
+  "condition": "good|neutral|bad",
+  "messages": ["sentence 1", "sentence 2", "sentence 3", "sentence 4", "sentence 5"]
+}}
+""".strip()
+
+    body = json.dumps(
+        {
+            'model': settings.OPENROUTER_MODEL,
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': 'You output strict JSON only. No markdown. No commentary.',
+                },
+                {'role': 'user', 'content': prompt},
+            ],
+            'temperature': 0.7,
+        }
+    ).encode('utf-8')
+
+    request = urllib.request.Request(
+        'https://openrouter.ai/api/v1/chat/completions',
+        data=body,
+        headers={
+            'Authorization': f'Bearer {settings.OPENROUTER_API_KEY}',
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as error:
+        details = error.read().decode('utf-8', errors='ignore')
+        raise PlantAnalysisError(f'OpenRouter request failed: {error.code} {details}') from error
+    except urllib.error.URLError as error:
+        raise PlantAnalysisError(f'OpenRouter request failed: {error.reason}') from error
+
+    try:
+        content = payload['choices'][0]['message']['content']
+        analysis = json.loads(_extract_json_object(content))
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+        raise PlantAnalysisError('Failed to parse LLM response.') from error
+
+    condition = analysis.get('condition')
+    messages = analysis.get('messages')
+    valid_conditions = {'good', 'neutral', 'bad'}
+
+    if condition not in valid_conditions:
+        raise PlantAnalysisError('LLM returned an invalid condition.')
+
+    if not isinstance(messages, list) or len(messages) != 5:
+        raise PlantAnalysisError('LLM did not return exactly 5 messages.')
+
+    cleaned_messages = []
+    for message in messages:
+        cleaned_message = str(message).strip()
+        if not cleaned_message:
+            raise PlantAnalysisError('LLM returned an empty message.')
+        cleaned_messages.append(cleaned_message)
+
+    return {
+        'condition': condition,
+        'messages': cleaned_messages,
+    }
+
+
+def synthesize_speech_mp3(text):
+    audio_buffer = io.BytesIO()
+    tts = gTTS(text=text, lang=settings.PLANT_TTS_LANGUAGE)
+    tts.write_to_fp(audio_buffer)
+    return audio_buffer.getvalue()

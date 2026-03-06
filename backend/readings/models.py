@@ -1,0 +1,28 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+
+
+class PlantReading(models.Model):
+    CONDITION_GOOD = 'good'
+    CONDITION_NEUTRAL = 'neutral'
+    CONDITION_BAD = 'bad'
+    CONDITION_CHOICES = [
+        (CONDITION_GOOD, 'Good'),
+        (CONDITION_NEUTRAL, 'Neutral'),
+        (CONDITION_BAD, 'Bad'),
+    ]
+
+    soil_level = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    ambient_light_level = models.PositiveIntegerField()
+    condition = models.CharField(max_length=10, choices=CONDITION_CHOICES, blank=True, null=True)
+    plant_messages = models.JSONField(default=list, blank=True)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-recorded_at']
+
+    def __str__(self):
+        condition = self.condition or 'unclassified'
+        return f'{self.soil_level}% soil, {self.ambient_light_level} lux, {condition}'
