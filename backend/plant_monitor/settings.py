@@ -147,4 +147,5 @@ CORS_ALLOWED_ORIGINS = [
 
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'deepseek/deepseek-v3.2')
+OPENROUTER_CA_BUNDLE = os.environ.get('OPENROUTER_CA_BUNDLE', '')
 PLANT_TTS_LANGUAGE = os.environ.get('PLANT_TTS_LANGUAGE', 'en')

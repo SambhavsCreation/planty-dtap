@@ -1,14 +1,24 @@
 import io
 import json
+import ssl
 import urllib.error
 import urllib.request
 
+import certifi
 from django.conf import settings
 from gtts import gTTS
 
 
 class PlantAnalysisError(Exception):
     pass
+
+
+def _build_openrouter_ssl_context():
+    ca_bundle_path = (getattr(settings, 'OPENROUTER_CA_BUNDLE', '') or '').strip()
+    if not ca_bundle_path:
+        ca_bundle_path = certifi.where()
+
+    return ssl.create_default_context(cafile=ca_bundle_path)
 
 
 def _extract_json_object(raw_content):
@@ -79,13 +89,22 @@ Return only valid JSON in this exact shape:
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
+        ssl_context = _build_openrouter_ssl_context()
+        with urllib.request.urlopen(request, timeout=45, context=ssl_context) as response:
             payload = json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as error:
         details = error.read().decode('utf-8', errors='ignore')
         raise PlantAnalysisError(f'OpenRouter request failed: {error.code} {details}') from error
     except urllib.error.URLError as error:
+        reason_text = str(error.reason)
+        if isinstance(error.reason, ssl.SSLCertVerificationError) or 'CERTIFICATE_VERIFY_FAILED' in reason_text:
+            raise PlantAnalysisError(
+                'OpenRouter request failed: TLS certificate verification failed. '
+                'Install your OS/Python CA certificates or set OPENROUTER_CA_BUNDLE to a PEM bundle path.'
+            ) from error
         raise PlantAnalysisError(f'OpenRouter request failed: {error.reason}') from error
+    except OSError as error:
+        raise PlantAnalysisError(f'OpenRouter SSL setup failed: {error}') from error
 
     try:
         content = payload['choices'][0]['message']['content']

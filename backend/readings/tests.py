@@ -1,10 +1,27 @@
 import json
+import ssl
+import urllib.error
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import PlantReading
+from .services import PlantAnalysisError, analyze_reading_with_llm
+
+
+class _FakeUrlopenResponse:
+    def __init__(self, payload_bytes):
+        self._payload_bytes = payload_bytes
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self):
+        return self._payload_bytes
 
 
 class PlantReadingApiTests(TestCase):
@@ -111,3 +128,75 @@ class PlantReadingApiTests(TestCase):
         self.assertEqual(response['X-Plant-Condition'], 'good')
         self.assertEqual(response['X-Plant-Message'], 'I feel great today.')
         self.assertEqual(response.content, b'MP3DATA')
+
+
+class PlantAnalysisTlsTests(TestCase):
+    @staticmethod
+    def _mock_payload():
+        return json.dumps(
+            {
+                'choices': [
+                    {
+                        'message': {
+                            'content': json.dumps(
+                                {
+                                    'condition': 'good',
+                                    'messages': [
+                                        'I feel great.',
+                                        'My roots are happy.',
+                                        'The light is lovely.',
+                                        'My leaves feel fresh.',
+                                        'Thank you for the care.',
+                                    ],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        ).encode('utf-8')
+
+    @override_settings(OPENROUTER_API_KEY='test-key', OPENROUTER_CA_BUNDLE='/tmp/custom-ca.pem')
+    @patch('readings.services.ssl.create_default_context')
+    @patch('readings.services.urllib.request.urlopen')
+    def test_openrouter_uses_configured_ca_bundle(self, urlopen_mock, create_context_mock):
+        context = object()
+        create_context_mock.return_value = context
+        urlopen_mock.return_value = _FakeUrlopenResponse(self._mock_payload())
+
+        analyze_reading_with_llm(soil_level=50, ambient_light_level=400)
+
+        create_context_mock.assert_called_once_with(cafile='/tmp/custom-ca.pem')
+        _args, kwargs = urlopen_mock.call_args
+        self.assertEqual(kwargs['context'], context)
+
+    @override_settings(OPENROUTER_API_KEY='test-key', OPENROUTER_CA_BUNDLE='')
+    @patch('readings.services.certifi.where', return_value='/tmp/certifi-ca.pem')
+    @patch('readings.services.ssl.create_default_context')
+    @patch('readings.services.urllib.request.urlopen')
+    def test_openrouter_uses_certifi_bundle_by_default(
+        self, urlopen_mock, create_context_mock, certifi_where_mock
+    ):
+        context = object()
+        create_context_mock.return_value = context
+        urlopen_mock.return_value = _FakeUrlopenResponse(self._mock_payload())
+
+        analyze_reading_with_llm(soil_level=50, ambient_light_level=400)
+
+        certifi_where_mock.assert_called_once_with()
+        create_context_mock.assert_called_once_with(cafile='/tmp/certifi-ca.pem')
+        _args, kwargs = urlopen_mock.call_args
+        self.assertEqual(kwargs['context'], context)
+
+    @override_settings(OPENROUTER_API_KEY='test-key')
+    @patch(
+        'readings.services.urllib.request.urlopen',
+        side_effect=urllib.error.URLError(
+            ssl.SSLCertVerificationError('unable to get local issuer certificate')
+        ),
+    )
+    def test_openrouter_ssl_error_has_actionable_message(self, _urlopen_mock):
+        with self.assertRaises(PlantAnalysisError) as error_context:
+            analyze_reading_with_llm(soil_level=50, ambient_light_level=400)
+
+        self.assertIn('TLS certificate verification failed', str(error_context.exception))
