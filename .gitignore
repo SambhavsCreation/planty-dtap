@@ -1,0 +1,9 @@
+.venv/
+.next/
+frontend/node_modules/
+backend/db.sqlite3
+__pycache__/
+*.pyc
+
+.DS_Store
+.env
