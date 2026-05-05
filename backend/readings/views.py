@@ -5,7 +5,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .models import PlantReading
+from .models import PlantReading, AppMode
 from .services import PlantAnalysisError, analyze_reading_with_llm, synthesize_speech_mp3
 
 
@@ -14,6 +14,9 @@ def _serialize_reading(reading):
         'id': reading.id,
         'soilLevel': reading.soil_level,
         'ambientLightLevel': reading.ambient_light_level,
+        'humidityLevels': reading.humidity_levels,
+        'temperatureLevels': reading.temperature_levels,
+        'deviceId': reading.device_id,
         'condition': reading.condition,
         'plantMessages': reading.plant_messages,
         'recordedAt': reading.recorded_at.isoformat(),
@@ -21,7 +24,7 @@ def _serialize_reading(reading):
 
 
 def _validate_payload(payload):
-    required_fields = ['soilLevel', 'ambientLightLevel']
+    required_fields = ['soilLevel', 'ambientLightLevel', 'humidityLevels', 'temperatureLevels', 'deviceId']
     missing_fields = [field for field in required_fields if field not in payload]
     if missing_fields:
         return None, f"Missing required fields: {', '.join(missing_fields)}"
@@ -29,8 +32,11 @@ def _validate_payload(payload):
     try:
         soil_level = int(payload['soilLevel'])
         ambient_light_level = int(payload['ambientLightLevel'])
+        humidity_levels = float(payload['humidityLevels'])
+        temperature_levels = float(payload['temperatureLevels'])
+        device_id = str(payload['deviceId'])
     except (TypeError, ValueError):
-        return None, 'soilLevel and ambientLightLevel must be integers.'
+        return None, 'soilLevel and ambientLightLevel must be integers. humidityLevels and temperatureLevels must be numbers.'
 
     if not 0 <= soil_level <= 100:
         return None, 'soilLevel must be between 0 and 100.'
@@ -41,7 +47,30 @@ def _validate_payload(payload):
     return {
         'soil_level': soil_level,
         'ambient_light_level': ambient_light_level,
+        'humidity_levels': humidity_levels,
+        'temperature_levels': temperature_levels,
+        'device_id': device_id,
     }, None
+
+
+@csrf_exempt
+@require_http_methods(['GET', 'POST'])
+def app_mode(request):
+    setting, _ = AppMode.objects.get_or_create(id=1)
+    if request.method == 'GET':
+        return JsonResponse({'mode': setting.mode})
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Request body must be valid JSON.'}, status=400)
+
+    new_mode = payload.get('mode')
+    if new_mode in ['sfw', 'nsfw']:
+        setting.mode = new_mode
+        setting.save()
+        return JsonResponse({'mode': setting.mode})
+    return JsonResponse({'error': 'Mode must be "sfw" or "nsfw".'}, status=400)
 
 
 @require_http_methods(['GET'])
@@ -74,10 +103,16 @@ def readings_collection(request):
     if error:
         return JsonResponse({'error': error}, status=400)
 
+    setting, _ = AppMode.objects.get_or_create(id=1)
+    
     try:
         analysis = analyze_reading_with_llm(
             soil_level=reading_data['soil_level'],
             ambient_light_level=reading_data['ambient_light_level'],
+            humidity_levels=reading_data['humidity_levels'],
+            temperature_levels=reading_data['temperature_levels'],
+            device_id=reading_data['device_id'],
+            mode=setting.mode,
         )
     except PlantAnalysisError as error:
         return JsonResponse({'error': str(error)}, status=502)

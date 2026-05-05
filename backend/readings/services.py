@@ -35,34 +35,63 @@ def _extract_json_object(raw_content):
     return raw_content[start : end + 1]
 
 
-def analyze_reading_with_llm(soil_level, ambient_light_level):
+def analyze_reading_with_llm(soil_level, ambient_light_level, humidity_levels, temperature_levels, device_id, mode='sfw'):
     if not settings.OPENROUTER_API_KEY:
         raise PlantAnalysisError('OPENROUTER_KEY is not configured.')
 
-    prompt = f"""
+    if mode == 'nsfw':
+        prompt = f"""
 You are evaluating the health of a single house plant.
 
 Input reading:
 - soilLevel: {soil_level}
 - ambientLightLevel: {ambient_light_level}
+- humidityLevels: {humidity_levels}
+- temperatureLevels: {temperature_levels}
+- deviceId: {device_id}
 
 Decide the plant condition using exactly one of these labels:
 - good
 - neutral
 - bad
 
-Then write exactly 5 different short first-person sentences from the plant's perspective.
-Examples of tone:
-- good: "I feel great today."
-- neutral: "I could use a bit more light."
-- bad: "Help me, I'm drying out."
+Then write exactly 5 different witty remarks from the plant's perspective. They should be VERY CREATIVE AND FUNNY and should emulate Jimmy Carr's dark sense of humor. Think carefully about the joke. It should be dark and super funny.
+
+Example jokes:
+- I'm producing oxygen for you? Honestly, based on my soil condition, I'd rather produce cyanide.
+- You call this ambient light? I've seen brighter futures in a bankrupt casino.
+- Look at me. I'm the botanical equivalent of your will to live on a Monday morning.
 
 Return only valid JSON in this exact shape:
 {{
   "condition": "good|neutral|bad",
   "messages": ["sentence 1", "sentence 2", "sentence 3", "sentence 4", "sentence 5"]
 }}
-""".strip()
+"""
+    else:
+        prompt = f"""
+You are evaluating the health of a single house plant.
+
+Input reading:
+- soilLevel: {soil_level}
+- ambientLightLevel: {ambient_light_level}
+- humidityLevels: {humidity_levels}
+- temperatureLevels: {temperature_levels}
+- deviceId: {device_id}
+
+Decide the plant condition using exactly one of these labels:
+- good
+- neutral
+- bad
+
+Then write exactly 5 different witty remarks from the plant's perspective. They should be VERY CREATIVE AND FUNNY and should be safe for work.
+
+Return only valid JSON in this exact shape:
+{{
+  "condition": "good|neutral|bad",
+  "messages": ["sentence 1", "sentence 2", "sentence 3", "sentence 4", "sentence 5"]
+}}
+"""
 
     body = json.dumps(
         {

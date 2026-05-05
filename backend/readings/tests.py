@@ -59,6 +59,9 @@ class PlantReadingApiTests(TestCase):
                 {
                     'soilLevel': 61,
                     'ambientLightLevel': 420,
+                    'humidityLevels': 40.5,
+                    'temperatureLevels': 22.0,
+                    'deviceId': 'test-device',
                 }
             ),
             content_type='application/json',
@@ -76,6 +79,9 @@ class PlantReadingApiTests(TestCase):
                 {
                     'soilLevel': 120,
                     'ambientLightLevel': 520,
+                    'humidityLevels': 40.5,
+                    'temperatureLevels': 22.0,
+                    'deviceId': 'test-device',
                 }
             ),
             content_type='application/json',
@@ -164,7 +170,7 @@ class PlantAnalysisTlsTests(TestCase):
         create_context_mock.return_value = context
         urlopen_mock.return_value = _FakeUrlopenResponse(self._mock_payload())
 
-        analyze_reading_with_llm(soil_level=50, ambient_light_level=400)
+        analyze_reading_with_llm(soil_level=50, ambient_light_level=400, humidity_levels=40.0, temperature_levels=22.0, device_id='test')
 
         create_context_mock.assert_called_once_with(cafile='/tmp/custom-ca.pem')
         _args, kwargs = urlopen_mock.call_args
@@ -181,7 +187,7 @@ class PlantAnalysisTlsTests(TestCase):
         create_context_mock.return_value = context
         urlopen_mock.return_value = _FakeUrlopenResponse(self._mock_payload())
 
-        analyze_reading_with_llm(soil_level=50, ambient_light_level=400)
+        analyze_reading_with_llm(soil_level=50, ambient_light_level=400, humidity_levels=40.0, temperature_levels=22.0, device_id='test')
 
         certifi_where_mock.assert_called_once_with()
         create_context_mock.assert_called_once_with(cafile='/tmp/certifi-ca.pem')
@@ -197,6 +203,6 @@ class PlantAnalysisTlsTests(TestCase):
     )
     def test_openrouter_ssl_error_has_actionable_message(self, _urlopen_mock):
         with self.assertRaises(PlantAnalysisError) as error_context:
-            analyze_reading_with_llm(soil_level=50, ambient_light_level=400)
+            analyze_reading_with_llm(soil_level=50, ambient_light_level=400, humidity_levels=40.0, temperature_levels=22.0, device_id='test')
 
         self.assertIn('TLS certificate verification failed', str(error_context.exception))

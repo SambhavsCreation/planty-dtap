@@ -10,6 +10,9 @@ const chartPadding = 32;
 const emptyForm = {
   soilLevel: '50',
   ambientLightLevel: '400',
+  humidityLevels: '40',
+  temperatureLevels: '22',
+  deviceId: 'device-1',
 };
 
 function buildLinePath(readings, width, height, getValue, maxValue) {
@@ -135,6 +138,9 @@ export default function HomePage() {
         body: JSON.stringify({
           soilLevel: Number(formValues.soilLevel),
           ambientLightLevel: Number(formValues.ambientLightLevel),
+          humidityLevels: Number(formValues.humidityLevels),
+          temperatureLevels: Number(formValues.temperatureLevels),
+          deviceId: String(formValues.deviceId),
         }),
       });
 
@@ -232,6 +238,41 @@ export default function HomePage() {
               type="number"
               min="0"
               value={formValues.ambientLightLevel}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Humidity (%)
+            <input
+              name="humidityLevels"
+              type="number"
+              step="0.1"
+              value={formValues.humidityLevels}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Temperature (°C)
+            <input
+              name="temperatureLevels"
+              type="number"
+              step="0.1"
+              value={formValues.temperatureLevels}
+              onChange={handleChange}
+              required
+            />
+          </label>
+
+          <label>
+            Device ID
+            <input
+              name="deviceId"
+              type="text"
+              value={formValues.deviceId}
               onChange={handleChange}
               required
             />
@@ -370,6 +411,18 @@ export default function HomePage() {
                   <strong>{latest.ambientLightLevel} lux</strong>
                 </article>
                 <article>
+                  <span>Humidity</span>
+                  <strong>{latest.humidityLevels}%</strong>
+                </article>
+                <article>
+                  <span>Temperature</span>
+                  <strong>{latest.temperatureLevels}°C</strong>
+                </article>
+                <article>
+                  <span>Device ID</span>
+                  <strong>{latest.deviceId}</strong>
+                </article>
+                <article>
                   <span>Captured</span>
                   <strong>{new Date(latest.recordedAt).toLocaleString()}</strong>
                 </article>
@@ -392,16 +445,22 @@ export default function HomePage() {
                 <table>
                   <thead>
                     <tr>
+                      <th>Device ID</th>
                       <th>Soil</th>
                       <th>Light</th>
+                      <th>Humidity</th>
+                      <th>Temp</th>
                       <th>Recorded</th>
                     </tr>
                   </thead>
                   <tbody>
                     {readings.map((reading) => (
                       <tr key={reading.id}>
+                        <td>{reading.deviceId}</td>
                         <td>{reading.soilLevel}%</td>
                         <td>{reading.ambientLightLevel} lux</td>
+                        <td>{reading.humidityLevels}%</td>
+                        <td>{reading.temperatureLevels}°C</td>
                         <td>{new Date(reading.recordedAt).toLocaleString()}</td>
                       </tr>
                     ))}
