@@ -165,7 +165,45 @@ Return only valid JSON in this exact shape:
 
 
 def synthesize_speech_mp3(text):
-    audio_buffer = io.BytesIO()
-    tts = gTTS(text=text, lang=settings.PLANT_TTS_LANGUAGE)
-    tts.write_to_fp(audio_buffer)
-    return audio_buffer.getvalue()
+    if not hasattr(settings, 'ELEVENLABS_API_KEY') or not settings.ELEVENLABS_API_KEY:
+        # Fallback to gTTS if ElevenLabs API key is missing
+        audio_buffer = io.BytesIO()
+        tts = gTTS(text=text, lang=settings.PLANT_TTS_LANGUAGE)
+        tts.write_to_fp(audio_buffer)
+        return audio_buffer.getvalue()
+
+    voice_id = getattr(settings, 'ELEVENLABS_VOICE_ID', 'pNInz6obpgDQGcFmaJgB')
+    url = f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}'
+
+    headers = {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': settings.ELEVENLABS_API_KEY
+    }
+
+    data = {
+        'text': text,
+        'model_id': 'eleven_multilingual_v2',
+        'voice_settings': {
+            'stability': 0.5,
+            'similarity_boost': 0.75,
+            'style': 0.5,
+            'use_speaker_boost': True
+        }
+    }
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode('utf-8'),
+        headers=headers,
+        method='POST'
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        details = error.read().decode('utf-8', errors='ignore')
+        raise Exception(f'ElevenLabs request failed: {error.code} {details}') from error
+    except urllib.error.URLError as error:
+        raise Exception(f'ElevenLabs request failed: {error.reason}') from error

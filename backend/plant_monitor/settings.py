@@ -149,3 +149,6 @@ OPENROUTER_API_KEY = os.environ.get('OPENROUTER_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'deepseek/deepseek-v3.2')
 OPENROUTER_CA_BUNDLE = os.environ.get('OPENROUTER_CA_BUNDLE', '')
 PLANT_TTS_LANGUAGE = os.environ.get('PLANT_TTS_LANGUAGE', 'en')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
+# Default to "Adam" or another voice. For funny, we can instruct to change it, or use a funny pre-made voice.
+ELEVENLABS_VOICE_ID = os.environ.get('ELEVENLABS_VOICE_ID', 'pNInz6obpgDQGcFmaJgB') # Adam voice as a standard fallback
