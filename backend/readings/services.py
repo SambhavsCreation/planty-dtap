@@ -35,34 +35,63 @@ def _extract_json_object(raw_content):
     return raw_content[start : end + 1]
 
 
-def analyze_reading_with_llm(soil_level, ambient_light_level):
+def analyze_reading_with_llm(soil_level, ambient_light_level, humidity_levels, temperature_levels, device_id, mode='sfw'):
     if not settings.OPENROUTER_API_KEY:
         raise PlantAnalysisError('OPENROUTER_KEY is not configured.')
 
-    prompt = f"""
+    if mode == 'nsfw':
+        prompt = f"""
 You are evaluating the health of a single house plant.
 
 Input reading:
 - soilLevel: {soil_level}
 - ambientLightLevel: {ambient_light_level}
+- humidityLevels: {humidity_levels}
+- temperatureLevels: {temperature_levels}
+- deviceId: {device_id}
 
 Decide the plant condition using exactly one of these labels:
 - good
 - neutral
 - bad
 
-Then write exactly 5 different short first-person sentences from the plant's perspective.
-Examples of tone:
-- good: "I feel great today."
-- neutral: "I could use a bit more light."
-- bad: "Help me, I'm drying out."
+Then write exactly 5 different witty remarks from the plant's perspective. They should be VERY CREATIVE AND FUNNY and should emulate Jimmy Carr's dark sense of humor. Think carefully about the joke. It should be dark and super funny.
+
+Example jokes:
+- I'm producing oxygen for you? Honestly, based on my soil condition, I'd rather produce cyanide.
+- You call this ambient light? I've seen brighter futures in a bankrupt casino.
+- Look at me. I'm the botanical equivalent of your will to live on a Monday morning.
 
 Return only valid JSON in this exact shape:
 {{
   "condition": "good|neutral|bad",
   "messages": ["sentence 1", "sentence 2", "sentence 3", "sentence 4", "sentence 5"]
 }}
-""".strip()
+"""
+    else:
+        prompt = f"""
+You are evaluating the health of a single house plant.
+
+Input reading:
+- soilLevel: {soil_level}
+- ambientLightLevel: {ambient_light_level}
+- humidityLevels: {humidity_levels}
+- temperatureLevels: {temperature_levels}
+- deviceId: {device_id}
+
+Decide the plant condition using exactly one of these labels:
+- good
+- neutral
+- bad
+
+Then write exactly 5 different witty remarks from the plant's perspective. They should be VERY CREATIVE AND FUNNY and should be safe for work.
+
+Return only valid JSON in this exact shape:
+{{
+  "condition": "good|neutral|bad",
+  "messages": ["sentence 1", "sentence 2", "sentence 3", "sentence 4", "sentence 5"]
+}}
+"""
 
     body = json.dumps(
         {
@@ -136,7 +165,44 @@ Return only valid JSON in this exact shape:
 
 
 def synthesize_speech_mp3(text):
-    audio_buffer = io.BytesIO()
-    tts = gTTS(text=text, lang=settings.PLANT_TTS_LANGUAGE)
-    tts.write_to_fp(audio_buffer)
-    return audio_buffer.getvalue()
+    if not hasattr(settings, 'ELEVENLABS_API_KEY') or not settings.ELEVENLABS_API_KEY:
+        audio_buffer = io.BytesIO()
+        tts = gTTS(text=text, lang=settings.PLANT_TTS_LANGUAGE)
+        tts.write_to_fp(audio_buffer)
+        return audio_buffer.getvalue()
+
+    voice_id = getattr(settings, 'ELEVENLABS_VOICE_ID', 'pNInz6obpgDQGcFmaJgB')
+    url = f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}'
+
+    headers = {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': settings.ELEVENLABS_API_KEY,
+    }
+
+    data = {
+        'text': text,
+        'model_id': 'eleven_multilingual_v2',
+        'voice_settings': {
+            'stability': 0.5,
+            'similarity_boost': 0.75,
+            'style': 0.5,
+            'use_speaker_boost': True,
+        },
+    }
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode('utf-8'),
+        headers=headers,
+        method='POST',
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        details = error.read().decode('utf-8', errors='ignore')
+        raise Exception(f'ElevenLabs request failed: {error.code} {details}') from error
+    except urllib.error.URLError as error:
+        raise Exception(f'ElevenLabs request failed: {error.reason}') from error
