@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: planty-patootie
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: gunicorn plant_monitor.wsgi
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENROUTER_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: deepseek/deepseek-v3.2
+      - key: PLANT_TTS_LANGUAGE
+        value: en
+      - key: DEBUG
+        value: False
+      - key: SECRET_KEY
+        generateValue: true
