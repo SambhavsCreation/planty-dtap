@@ -3,7 +3,7 @@ services:
     name: planty-patootie
     runtime: python
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: gunicorn plant_monitor.wsgi
+    startCommand: python manage.py migrate --no-input && gunicorn plant_monitor.wsgi
     rootDir: backend
     envVars:
       - key: DATABASE_URL
