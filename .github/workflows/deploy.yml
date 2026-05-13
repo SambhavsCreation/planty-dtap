@@ -25,7 +25,7 @@ jobs:
       - name: Install & Build
         working-directory: frontend
         run: |
-          npm ci
+          npm install
           npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
