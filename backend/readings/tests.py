@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import PlantReading
-from .services import PlantAnalysisError, analyze_reading_with_llm
+from .services import PlantAnalysisError, analyze_reading_with_llm, synthesize_speech_mp3
 
 
 class _FakeUrlopenResponse:
@@ -169,6 +169,20 @@ class PlantReadingApiTests(TestCase):
 
 
 class PlantAnalysisTlsTests(TestCase):
+    def test_synthesize_speech_mp3_real_generation(self):
+        # We test the actual unmocked gTTS fallback to ensure it genuinely generates an MP3 file
+        audio_bytes = synthesize_speech_mp3("This is a live test of the plant voice.")
+        
+        # Verify we got data back
+        self.assertGreater(len(audio_bytes), 1000)
+        
+        # Verify the file has an MP3/MPEG header. 
+        # ID3 tags start with b'ID3', while raw ADTS/MPEG frames typically start with b'\xff'
+        has_id3 = audio_bytes.startswith(b'ID3')
+        has_mpeg_sync = audio_bytes.startswith(b'\xff')
+        
+        self.assertTrue(has_id3 or has_mpeg_sync, "Resulting byte string is not a valid MP3 file")
+
     @staticmethod
     def _mock_payload():
         return json.dumps(
