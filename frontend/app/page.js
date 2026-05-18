@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://dtap-demo1.onrender.com/api';
+const LIVE_REFRESH_MS = 15000;
 
 const CHART_W = 720;
 const CHART_H = 260;
@@ -58,9 +59,11 @@ export default function HomePage() {
   const lightD = linePath(chartPts, pw, ph, (r) => r.ambientLightLevel, lightMax);
   const humD = linePath(chartPts, pw, ph, (r) => r.humidityLevels, 100);
 
-  async function loadReadings() {
-    setLoading(true);
-    setError('');
+  async function loadReadings(showLoading = true, suppressErrors = false) {
+    if (showLoading) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const r = await fetch(`${apiBaseUrl}/readings/`, { cache: 'no-store' });
       if (!r.ok) throw new Error('Failed to load readings.');
@@ -68,20 +71,20 @@ export default function HomePage() {
       setReadings(d.items || []);
       setLatest(d.latest || null);
     } catch (e) {
-      setError(e.message);
+      if (!suppressErrors) setError(e.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
-  async function loadStatus() {
+  async function loadStatus(suppressErrors = false) {
     try {
       const r = await fetch(`${apiBaseUrl}/plant/status/`, { cache: 'no-store' });
       if (r.status === 404) { setPlantStatus(null); return; }
       if (!r.ok) throw new Error('Failed to load status.');
       setPlantStatus(await r.json());
     } catch (e) {
-      setError(e.message);
+      if (!suppressErrors) setError(e.message);
     }
   }
 
@@ -96,6 +99,13 @@ export default function HomePage() {
     loadReadings();
     loadStatus();
     loadMode();
+
+    const intervalId = window.setInterval(() => {
+      loadReadings(false, true);
+      loadStatus(true);
+    }, LIVE_REFRESH_MS);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
