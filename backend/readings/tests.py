@@ -25,6 +25,38 @@ class _FakeUrlopenResponse:
 
 
 class PlantReadingApiTests(TestCase):
+    def test_health_check_returns_ok(self):
+        response = self.client.get(reverse('health_check'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ok')
+
+    def test_app_mode_get_and_post(self):
+        # Default mode
+        response = self.client.get(reverse('app_mode'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['mode'], 'sfw')
+
+        # Update mode
+        response = self.client.post(
+            reverse('app_mode'),
+            data=json.dumps({'mode': 'nsfw'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['mode'], 'nsfw')
+
+        # Verify update
+        response = self.client.get(reverse('app_mode'))
+        self.assertEqual(response.json()['mode'], 'nsfw')
+
+        # Invalid mode
+        response = self.client.post(
+            reverse('app_mode'),
+            data=json.dumps({'mode': 'invalid_mode'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 400)
+
     def test_get_readings_returns_latest_and_items(self):
         PlantReading.objects.create(
             soil_level=44,
