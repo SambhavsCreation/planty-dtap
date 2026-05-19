@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import ssl
@@ -165,30 +166,24 @@ Return only valid JSON in this exact shape:
 
 
 def synthesize_speech_mp3(text):
-    if not hasattr(settings, 'ELEVENLABS_API_KEY') or not settings.ELEVENLABS_API_KEY:
+    if not hasattr(settings, 'GOOGLE_API_KEY') or not settings.GOOGLE_API_KEY:
         audio_buffer = io.BytesIO()
         tts = gTTS(text=text, lang=settings.PLANT_TTS_LANGUAGE)
         tts.write_to_fp(audio_buffer)
         return audio_buffer.getvalue()
 
-    voice_id = getattr(settings, 'ELEVENLABS_VOICE_ID', 'pNInz6obpgDQGcFmaJgB')
-    url = f'https://api.elevenlabs.io/v1/text-to-speech/{voice_id}'
+    voice = getattr(settings, 'GOOGLE_TTS_VOICE', 'en-US-Journey-F')
+    language_code = '-'.join(voice.split('-')[:2]) if '-' in voice else 'en-US'
+    url = f'https://texttospeech.googleapis.com/v1/text:synthesize?key={settings.GOOGLE_API_KEY}'
 
     headers = {
-        'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
-        'xi-api-key': settings.ELEVENLABS_API_KEY,
     }
 
     data = {
-        'text': text,
-        'model_id': 'eleven_multilingual_v2',
-        'voice_settings': {
-            'stability': 0.5,
-            'similarity_boost': 0.75,
-            'style': 0.5,
-            'use_speaker_boost': True,
-        },
+        'input': {'text': text},
+        'voice': {'languageCode': language_code, 'name': voice},
+        'audioConfig': {'audioEncoding': 'MP3'}
     }
 
     request = urllib.request.Request(
@@ -199,10 +194,12 @@ def synthesize_speech_mp3(text):
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return response.read()
+        ssl_context = _build_openrouter_ssl_context()
+        with urllib.request.urlopen(request, timeout=30, context=ssl_context) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+            return base64.b64decode(payload['audioContent'])
     except urllib.error.HTTPError as error:
         details = error.read().decode('utf-8', errors='ignore')
-        raise Exception(f'ElevenLabs request failed: {error.code} {details}') from error
+        raise Exception(f'Google TTS request failed: {error.code} {details}') from error
     except urllib.error.URLError as error:
-        raise Exception(f'ElevenLabs request failed: {error.reason}') from error
+        raise Exception(f'Google TTS request failed: {error.reason}') from error

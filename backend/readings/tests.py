@@ -169,6 +169,7 @@ class PlantReadingApiTests(TestCase):
 
 
 class PlantAnalysisTlsTests(TestCase):
+    @override_settings(GOOGLE_API_KEY='')
     def test_synthesize_speech_mp3_real_generation(self):
         # We test the actual unmocked gTTS fallback to ensure it genuinely generates an MP3 file
         audio_bytes = synthesize_speech_mp3("This is a live test of the plant voice.")
