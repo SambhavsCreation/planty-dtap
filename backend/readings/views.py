@@ -104,7 +104,7 @@ def readings_collection(request):
         return JsonResponse({'error': error}, status=400)
 
     setting, _ = AppMode.objects.get_or_create(id=1)
-
+    
     try:
         analysis = analyze_reading_with_llm(
             soil_level=reading_data['soil_level'],

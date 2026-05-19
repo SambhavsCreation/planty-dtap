@@ -190,6 +190,26 @@ def synthesize_speech_mp3(text):
         url,
         data=json.dumps(data).encode('utf-8'),
         headers=headers,
+        method='POST'
+    )
+
+    try:
+        ssl_context = _build_openrouter_ssl_context()
+        with urllib.request.urlopen(request, timeout=30, context=ssl_context) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+            return base64.b64decode(payload['audioContent'])
+    except urllib.error.HTTPError as error:
+        details = error.read().decode('utf-8', errors='ignore')
+        raise Exception(f'Google TTS request failed: {error.code} {details}') from error
+    except urllib.error.URLError as error:
+        raise Exception(f'Google TTS request failed: {error.reason}') from error
+    }
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode('utf-8'),
+        headers=headers,
+<<<<<<< HEAD
         method='POST',
     )
 
@@ -203,3 +223,16 @@ def synthesize_speech_mp3(text):
         raise Exception(f'Google TTS request failed: {error.code} {details}') from error
     except urllib.error.URLError as error:
         raise Exception(f'Google TTS request failed: {error.reason}') from error
+=======
+        method='POST'
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        details = error.read().decode('utf-8', errors='ignore')
+        raise Exception(f'ElevenLabs request failed: {error.code} {details}') from error
+    except urllib.error.URLError as error:
+        raise Exception(f'ElevenLabs request failed: {error.reason}') from error
+>>>>>>> 7fcb28df1edd3bc9ac5800bb4dc59a139aac0e27
