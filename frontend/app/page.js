@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://dtap-demo1.onrender.com/api';
-const LIVE_REFRESH_MS = 15000;
 
 const CHART_W = 720;
 const CHART_H = 260;
@@ -14,8 +13,15 @@ const EMPTY_FORM = {
   ambientLightLevel: '400',
   humidityLevels: '40',
   temperatureLevels: '22',
-  deviceId: 'device-1',
 };
+
+// Icons (Lucide)
+const LeafIcon = () => <svg xmlns="http://www.جة" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>;
+const ActivityIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+const AudioIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>;
+const TableIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>;
+const SettingsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+const LogoutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
 
 function linePath(pts, w, h, val, max) {
   if (!pts.length || max <= 0) return '';
@@ -37,9 +43,22 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleString();
 }
 
-const MODE_ICONS = { sfw: '\u{1F33F}', nsfw: '\u{1F525}' };
+function getHealthIndex(r) {
+  if (!r) return null;
+  let score = 100;
+  if (r.condition === 'bad') score -= 40;
+  if (r.condition === 'neutral') score -= 15;
+  const soilDiff = Math.abs(50 - r.soilLevel);
+  if (soilDiff > 30) score -= 15;
+  if (r.temperatureLevels < 15 || r.temperatureLevels > 30) score -= 10;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
 
 export default function HomePage() {
+  const [deviceId, setDeviceId] = useState('');
+  const [isSetup, setIsSetup] = useState(false);
+  const [setupInput, setSetupInput] = useState('');
+
   const [form, setForm] = useState(EMPTY_FORM);
   const [readings, setReadings] = useState([]);
   const [latest, setLatest] = useState(null);
@@ -51,40 +70,52 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
 
-  const chartPts = [...readings].reverse();
-  const lightMax = Math.max(100, ...chartPts.map((r) => Math.ceil(r.ambientLightLevel / 100) * 100));
-  const pw = CHART_W - CHART_PAD * 2;
-  const ph = CHART_H - CHART_PAD * 2;
-  const soilD = linePath(chartPts, pw, ph, (r) => r.soilLevel, 100);
-  const lightD = linePath(chartPts, pw, ph, (r) => r.ambientLightLevel, lightMax);
-  const humD = linePath(chartPts, pw, ph, (r) => r.humidityLevels, 100);
-
-  async function loadReadings(showLoading = true, suppressErrors = false) {
-    if (showLoading) {
-      setLoading(true);
-      setError('');
+  useEffect(() => {
+    const savedId = localStorage.getItem('planty_device_id');
+    if (savedId) {
+      setDeviceId(savedId);
+      setIsSetup(true);
+    } else {
+      setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (isSetup && deviceId) {
+      loadReadings(deviceId);
+      loadStatus(deviceId);
+      loadMode();
+    }
+  }, [isSetup, deviceId]);
+
+  useEffect(() => {
+    return () => { if (audioUrl) URL.revokeObjectURL(audioUrl); };
+  }, [audioUrl]);
+
+  async function loadReadings(id) {
+    setLoading(true);
+    setError('');
     try {
-      const r = await fetch(`${apiBaseUrl}/readings/`, { cache: 'no-store' });
+      const r = await fetch(`${apiBaseUrl}/readings/?deviceId=${encodeURIComponent(id)}`, { cache: 'no-store' });
       if (!r.ok) throw new Error('Failed to load readings.');
       const d = await r.json();
       setReadings(d.items || []);
       setLatest(d.latest || null);
     } catch (e) {
-      if (!suppressErrors) setError(e.message);
+      setError(e.message);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
     }
   }
 
-  async function loadStatus(suppressErrors = false) {
+  async function loadStatus(id) {
     try {
-      const r = await fetch(`${apiBaseUrl}/plant/status/`, { cache: 'no-store' });
+      const r = await fetch(`${apiBaseUrl}/plant/status/?deviceId=${encodeURIComponent(id)}`, { cache: 'no-store' });
       if (r.status === 404) { setPlantStatus(null); return; }
       if (!r.ok) throw new Error('Failed to load status.');
       setPlantStatus(await r.json());
     } catch (e) {
-      if (!suppressErrors) setError(e.message);
+      setError(e.message);
     }
   }
 
@@ -95,22 +126,23 @@ export default function HomePage() {
     } catch {}
   }
 
-  useEffect(() => {
-    loadReadings();
-    loadStatus();
-    loadMode();
+  function handleSetupSubmit(e) {
+    e.preventDefault();
+    if (!setupInput.trim()) return;
+    localStorage.setItem('planty_device_id', setupInput.trim());
+    setDeviceId(setupInput.trim());
+    setIsSetup(true);
+  }
 
-    const intervalId = window.setInterval(() => {
-      loadReadings(false, true);
-      loadStatus(true);
-    }, LIVE_REFRESH_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
-    return () => { if (audioUrl) URL.revokeObjectURL(audioUrl); };
-  }, [audioUrl]);
+  function logout() {
+    localStorage.removeItem('planty_device_id');
+    setDeviceId('');
+    setIsSetup(false);
+    setReadings([]);
+    setLatest(null);
+    setPlantStatus(null);
+    setAudioUrl('');
+  }
 
   function onChange(e) {
     const { name, value } = e.target;
@@ -130,13 +162,13 @@ export default function HomePage() {
           ambientLightLevel: Number(form.ambientLightLevel),
           humidityLevels: Number(form.humidityLevels),
           temperatureLevels: Number(form.temperatureLevels),
-          deviceId: String(form.deviceId),
+          deviceId: deviceId,
         }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Failed to save.');
       setForm(EMPTY_FORM);
-      await Promise.all([loadReadings(), loadStatus()]);
+      await Promise.all([loadReadings(deviceId), loadStatus(deviceId)]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -160,7 +192,7 @@ export default function HomePage() {
     setSpeaking(true);
     setError('');
     try {
-      const r = await fetch(`${apiBaseUrl}/plant/voice/`);
+      const r = await fetch(`${apiBaseUrl}/plant/voice/?deviceId=${encodeURIComponent(deviceId)}`);
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Voice failed.'); }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
@@ -176,32 +208,102 @@ export default function HomePage() {
     }
   }
 
+  if (!isSetup) {
+    return (
+      <div className="app theme-good">
+        <div className="setup-overlay">
+          <form className="setup-card" onSubmit={handleSetupSubmit}>
+            <div className="setup-icon"><LeafIcon /></div>
+            <h1 className="setup-title">Welcome to Planty</h1>
+            <p className="setup-desc">Enter your unique Planty Device ID to connect to your dashboard.</p>
+            <div className="setup-form">
+              <input 
+                autoFocus
+                className="setup-input" 
+                placeholder="e.g. ESP32_LIVING_ROOM" 
+                value={setupInput} 
+                onChange={e => setSetupInput(e.target.value)} 
+                required 
+              />
+              <button className="btn-primary" type="submit">Connect Device</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   const cond = latest?.condition || plantStatus?.condition || 'unknown';
+  const themeClass = cond === 'bad' ? 'theme-bad' : cond === 'neutral' ? 'theme-neutral' : 'theme-good';
+  const healthIndex = getHealthIndex(latest);
+
+  const chartPts = [...readings].reverse();
+  const lightMax = Math.max(100, ...chartPts.map((r) => Math.ceil(r.ambientLightLevel / 100) * 100));
+  const pw = CHART_W - CHART_PAD * 2;
+  const ph = CHART_H - CHART_PAD * 2;
+  const soilD = linePath(chartPts, pw, ph, (r) => r.soilLevel, 100);
+  const lightD = linePath(chartPts, pw, ph, (r) => r.ambientLightLevel, lightMax);
+  const humD = linePath(chartPts, pw, ph, (r) => r.humidityLevels, 100);
 
   return (
-    <div className="app">
+    <div className={`app ${themeClass}`}>
       <header className="header">
         <div className="header-inner">
           <div className="brand">
-            <span className="logo">🌱</span>
+            <LeafIcon />
             <div>
               <h1 className="title">Planty Patootie</h1>
-              <p className="subtitle">Smart plant health monitor</p>
+              <p className="subtitle">ID: {deviceId}</p>
             </div>
           </div>
-          <button className={`mode-toggle ${appMode}`} onClick={toggleMode} title="Toggle SFW / NSFW">
-            <span className="mode-icon">{MODE_ICONS[appMode]}</span>
-            <span className="mode-label">{appMode.toUpperCase()}</span>
-          </button>
+          <div className="header-actions">
+            <button className="mode-toggle" onClick={toggleMode} title="Toggle SFW / NSFW Mode">
+              <SettingsIcon />
+              <span>{appMode.toUpperCase()}</span>
+            </button>
+            <button className="btn-secondary" onClick={logout} title="Switch Device">
+              <LogoutIcon />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="main">
         <div className="grid">
           <aside className="sidebar">
+            
+            {latest && (
+              <div className="card metrics-card">
+                <div className="health-index-wrap">
+                  <span className="health-index-val">{healthIndex}</span>
+                  <span className="health-index-label">Health Index</span>
+                </div>
+                <div className="metrics-grid">
+                  <div className="metric">
+                    <span className="metric-label">Soil</span>
+                    <span className="metric-value">{latest.soilLevel}%</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Light</span>
+                    <span className="metric-value">{latest.ambientLightLevel} lx</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Humidity</span>
+                    <span className="metric-value">{latest.humidityLevels}%</span>
+                  </div>
+                  <div className="metric">
+                    <span className="metric-label">Temp</span>
+                    <span className="metric-value">{latest.temperatureLevels}°C</span>
+                  </div>
+                </div>
+                <p className="timestamp">Updated {fmtDate(latest.recordedAt)}</p>
+              </div>
+            )}
+
             <form className="card form-card" onSubmit={onSubmit}>
               <h2 className="card-title">
-                <span className="card-icon">📝</span> New Reading
+                <ActivityIcon /> Add Reading
               </h2>
               <div className="field">
                 <label htmlFor="soilLevel">Soil Moisture (%)</label>
@@ -220,62 +322,23 @@ export default function HomePage() {
                 <label htmlFor="temperatureLevels">Temperature (°C)</label>
                 <input id="temperatureLevels" name="temperatureLevels" type="number" step="0.1" value={form.temperatureLevels} onChange={onChange} required />
               </div>
-              <div className="field">
-                <label htmlFor="deviceId">Device ID</label>
-                <input id="deviceId" name="deviceId" type="text" value={form.deviceId} onChange={onChange} required />
-              </div>
               <button className="btn-primary" type="submit" disabled={submitting}>
                 {submitting ? 'Analyzing...' : 'Submit Reading'}
               </button>
             </form>
-
-            {latest && (
-              <div className="card metrics-card">
-                <h2 className="card-title">
-                  <span className="card-icon">📊</span> Latest Reading
-                </h2>
-                <div className="metrics-grid">
-                  <div className="metric">
-                    <span className="metric-label">Condition</span>
-                    <span className={`metric-value cond-${cond}`}>{cond}</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">Soil</span>
-                    <span className="metric-value">{latest.soilLevel}%</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">Light</span>
-                    <span className="metric-value">{latest.ambientLightLevel} lux</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">Humidity</span>
-                    <span className="metric-value">{latest.humidityLevels}%</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">Temp</span>
-                    <span className="metric-value">{latest.temperatureLevels}°C</span>
-                  </div>
-                  <div className="metric">
-                    <span className="metric-label">Device</span>
-                    <span className="metric-value metric-sm">{latest.deviceId}</span>
-                  </div>
-                </div>
-                <p className="timestamp">Captured {fmtDate(latest.recordedAt)}</p>
-              </div>
-            )}
           </aside>
 
           <div className="content">
             <section className="card voice-card">
               <h2 className="card-title">
-                <span className="card-icon">🗣️</span> Plant Voice
+                <AudioIcon /> Plant Voice
               </h2>
               {plantStatus ? (
                 <div className="voice-body">
                   <div className="voice-header">
-                    <span className={`cond-badge cond-${cond}`}>{cond}</span>
-                    <button className="btn-voice" onClick={playVoice} disabled={speaking}>
-                      {speaking ? 'Generating...' : '🔊 Hear the Plant'}
+                    <span className="cond-badge">{cond}</span>
+                    <button className="btn-primary" onClick={playVoice} disabled={speaking}>
+                      <AudioIcon /> {speaking ? 'Generating...' : 'Listen'}
                     </button>
                   </div>
                   <blockquote className="quote">&ldquo;{plantStatus.message}&rdquo;</blockquote>
@@ -287,13 +350,13 @@ export default function HomePage() {
                   </ul>
                 </div>
               ) : (
-                <p className="empty">Submit a reading to awaken the plant.</p>
+                <p className="empty">Submit a reading to awaken your plant.</p>
               )}
             </section>
 
             <section className="card chart-card">
               <h2 className="card-title">
-                <span className="card-icon">📈</span> Sensor Trends
+                <ActivityIcon /> Sensor Trends
               </h2>
               {chartPts.length ? (
                 <>
@@ -334,7 +397,7 @@ export default function HomePage() {
 
             <section className="card table-card">
               <h2 className="card-title">
-                <span className="card-icon">📋</span> History
+                <TableIcon /> History Log
               </h2>
               {loading ? (
                 <p className="empty">Loading...</p>
@@ -343,7 +406,6 @@ export default function HomePage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Device</th>
                         <th>Soil</th>
                         <th>Light</th>
                         <th>Humidity</th>
@@ -354,9 +416,8 @@ export default function HomePage() {
                     <tbody>
                       {readings.map((r) => (
                         <tr key={r.id}>
-                          <td className="mono">{r.deviceId}</td>
                           <td>{r.soilLevel}%</td>
-                          <td>{r.ambientLightLevel} lux</td>
+                          <td>{r.ambientLightLevel} lx</td>
                           <td>{r.humidityLevels}%</td>
                           <td>{r.temperatureLevels}°C</td>
                           <td className="mono">{fmtTime(r.recordedAt)}</td>
@@ -376,7 +437,7 @@ export default function HomePage() {
       {error && <div className="toast" role="alert">{error}</div>}
 
       <footer className="footer">
-        <p>Planty Patootie &middot; Aalto DTAP Demo &middot; Django + Next.js</p>
+        <p>Planty Patootie &middot; Device: {deviceId} &middot; Aalto DTAP</p>
       </footer>
     </div>
   );
