@@ -71,6 +71,8 @@ struct SensorData {
 };
 
 volatile bool postInProgress = false;
+unsigned long postStartTime = 0;
+#define POST_TIMEOUT_MS 30000
 
 void postTask(void* param) {
     SensorData* data = (SensorData*)param;
@@ -87,6 +89,8 @@ void postTask(void* param) {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
+    http.setConnectTimeout(10000);
+    http.setTimeout(15000);
     http.begin(client, readingsUrl.c_str());
     http.addHeader("Content-Type", "application/json");
     int code = http.POST(json);
@@ -147,7 +151,7 @@ void setup(){
 void loop(){
     // ----------- SEND SENSOR DATA -----------
     
-    if (millis() - startTimeForRequest > 5000 && !postInProgress) {
+    if (millis() - startTimeForRequest > 5000 && !postInProgress && !audioPlaying) {
 
         ensureWiFi();
 
@@ -159,6 +163,7 @@ void loop(){
         data->lightLux    = lightMeter.readLightLevel();
 
         postInProgress = true;
+        postStartTime = millis();
         xTaskCreatePinnedToCore(
             postTask,    
             "postTask",  
@@ -170,6 +175,11 @@ void loop(){
         );
 
         startTimeForRequest = millis();
+    }
+
+    if (postInProgress && millis() - postStartTime > POST_TIMEOUT_MS) {
+        Serial.println("POST timed out — resetting postInProgress");
+        postInProgress = false;
     }
     
 
