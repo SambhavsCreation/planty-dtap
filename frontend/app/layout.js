@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Plant Monitor',
-  description: 'Track plant soil moisture and ambient light readings.',
+  title: 'Planty Patootie',
+  description: 'Smart plant health monitor with AI-powered voice',
 };
 
 export default function RootLayout({ children }) {

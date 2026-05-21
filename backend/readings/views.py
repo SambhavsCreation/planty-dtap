@@ -78,8 +78,12 @@ def health_check(_request):
     return JsonResponse({'status': 'ok'})
 
 
-def _get_latest_analyzed_reading():
-    for reading in PlantReading.objects.exclude(condition__isnull=True).exclude(condition=''):
+def _get_latest_analyzed_reading(device_id=None):
+    qs = PlantReading.objects.exclude(condition__isnull=True).exclude(condition='')
+    if device_id:
+        qs = qs.filter(device_id=device_id)
+        
+    for reading in qs:
         if isinstance(reading.plant_messages, list) and reading.plant_messages:
             return reading
 
@@ -90,7 +94,11 @@ def _get_latest_analyzed_reading():
 @require_http_methods(['GET', 'POST'])
 def readings_collection(request):
     if request.method == 'GET':
-        readings = [_serialize_reading(reading) for reading in PlantReading.objects.all()[:20]]
+        device_id = request.GET.get('deviceId')
+        qs = PlantReading.objects.all()
+        if device_id:
+            qs = qs.filter(device_id=device_id)
+        readings = [_serialize_reading(reading) for reading in qs[:20]]
         latest = readings[0] if readings else None
         return JsonResponse({'items': readings, 'latest': latest})
 
@@ -127,7 +135,8 @@ def readings_collection(request):
 
 @require_http_methods(['GET'])
 def plant_status(request):
-    reading = _get_latest_analyzed_reading()
+    device_id = request.GET.get('deviceId')
+    reading = _get_latest_analyzed_reading(device_id)
     if reading is None:
         return JsonResponse({'error': 'No analyzed plant reading is available yet.'}, status=404)
 
@@ -144,7 +153,8 @@ def plant_status(request):
 
 @require_http_methods(['GET'])
 def plant_voice(request):
-    reading = _get_latest_analyzed_reading()
+    device_id = request.GET.get('deviceId')
+    reading = _get_latest_analyzed_reading(device_id)
     if reading is None:
         return JsonResponse({'error': 'No analyzed plant reading is available yet.'}, status=404)
 

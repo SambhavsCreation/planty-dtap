@@ -11,11 +11,15 @@ Each reading stores:
 
 - `soilLevel` as a percentage from 0 to 100
 - `ambientLightLevel` in lux
+- `humidityLevels` as a percentage
+- `temperatureLevels` in Celsius
+- `deviceId` identifying the hardware module
 - `recordedAt`
 
 ## Backend API
 
 - `GET /api/health/`
+- `GET /api/mode/` (also accepts POST to set SFW or NSFW humor mode)
 - `GET /api/readings/`
 - `POST /api/readings/`
 - `GET /api/plant/status/`
@@ -26,7 +30,10 @@ Example request:
 ```json
 {
   "soilLevel": 58,
-  "ambientLightLevel": 620
+  "ambientLightLevel": 620,
+  "humidityLevels": 45.5,
+  "temperatureLevels": 22.0,
+  "deviceId": "living-room-1"
 }
 ```
 
@@ -49,6 +56,7 @@ On `POST /api/readings/`, the backend sends the reading to OpenRouter, stores:
 ```bash
 cat > .env <<'EOF'
 OPENROUTER_KEY=your_openrouter_key_here
+GOOGLE_API_KEY=your_google_cloud_api_key_here
 # Optional: custom CA bundle path (PEM) for corporate/proxy environments
 # OPENROUTER_CA_BUNDLE=/absolute/path/to/ca-bundle.pem
 EOF
@@ -97,7 +105,7 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api npm run dev
 ```bash
 curl -X POST http://127.0.0.1:8000/api/readings/ \
   -H "Content-Type: application/json" \
-  -d '{"soilLevel":27,"ambientLightLevel":140}'
+  -d '{"soilLevel":27,"ambientLightLevel":140,"humidityLevels":40,"temperatureLevels":22,"deviceId":"device-1"}'
 ```
 
 Expected behavior:
@@ -130,6 +138,9 @@ Expected response shape:
     "id": 10,
     "soilLevel": 27,
     "ambientLightLevel": 140,
+    "humidityLevels": 40.0,
+    "temperatureLevels": 22.0,
+    "deviceId": "device-1",
     "condition": "neutral",
     "plantMessages": [
       "My soil feels a bit dry, but I'm hanging in there.",
@@ -176,7 +187,7 @@ npm run build
 
 - If port `8000` is already in use, start Django on another port such as `8001` and update the frontend URL and `curl` commands accordingly.
 - `POST /api/readings/` depends on a valid `OPENROUTER_KEY`.
-- `GET /api/plant/voice/` uses `gTTS`, so it also requires outbound network access.
+- `GET /api/plant/voice/` uses Google Cloud Text-to-Speech if `GOOGLE_API_KEY` is provided, and gracefully falls back to `gTTS` if omitted. It requires outbound network access.
 - OpenRouter TLS verification uses `certifi` by default; if your machine needs a custom trust chain, set `OPENROUTER_CA_BUNDLE` in `.env`.
 
 ## Troubleshooting TLS errors

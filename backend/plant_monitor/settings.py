@@ -13,7 +13,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+import dj_database_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BASE_DIR.parent
 
@@ -34,17 +35,20 @@ def load_env_file(path):
 
 load_env_file(PROJECT_ROOT / '.env')
 
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY', 'django-insecure-s=^m&0%=o4kz-d5q32z@gi!(k4!s9w_0(b&w20x5k#)w=+@(b)'
+)
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-s=^m&0%=o4kz-d5q32z@gi!(k4!s9w_0(b&w20x5k#)w=+@(b)'
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com']
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+if 'DYNO' in os.environ:
+    ALLOWED_HOSTS.append('.herokuapp.com')
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
 # Application definition
@@ -62,6 +66,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -101,6 +106,9 @@ DATABASES = {
     }
 }
 
+if 'DATABASE_URL' in os.environ:
+    DATABASES['default'] = dj_database_url.config(conn_max_age=600)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -137,18 +145,29 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:3000',
     'http://localhost:3000',
+    'https://dtap-demo1.onrender.com',
+    'https://sambhavscreation.github.io',
 ]
+
+if 'DYNO' in os.environ:
+    CORS_ALLOWED_ORIGINS.append('https://planty-patootie.herokuapp.com')
 
 OPENROUTER_API_KEY = os.environ.get('OPENROUTER_KEY', '')
 OPENROUTER_MODEL = os.environ.get('OPENROUTER_MODEL', 'deepseek/deepseek-v3.2')
 OPENROUTER_CA_BUNDLE = os.environ.get('OPENROUTER_CA_BUNDLE', '')
 PLANT_TTS_LANGUAGE = os.environ.get('PLANT_TTS_LANGUAGE', 'en')
-ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY', '')
-# Default to "Adam" or another voice. For funny, we can instruct to change it, or use a funny pre-made voice.
-ELEVENLABS_VOICE_ID = os.environ.get('ELEVENLABS_VOICE_ID', 'pNInz6obpgDQGcFmaJgB') # Adam voice as a standard fallback
+GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY', '')
+GOOGLE_TTS_VOICE = os.environ.get('GOOGLE_TTS_VOICE', 'en-US-Journey-F')
